@@ -76,8 +76,8 @@ func stocklist() []string {
 	return codeList
 }
 
-// 根据输入生成K线下载的URL
-func urlGet(code, startT, endT string) string {
+// 根据输入生成K线下载的URL(老版本)
+func urlGet2(code, startT, endT string) string {
 	daySub := daySub(endT, startT) //日期差
 	rand.Seed(time.Now().Unix())   //随机数初始化,否则你每次的随机数都是固定的顺序
 	url := "http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=kline_dayqfq&param=%s,day,%s,%s,%d,qfq&r=%f"
@@ -85,8 +85,23 @@ func urlGet(code, startT, endT string) string {
 	return URL
 }
 
-// 下载日K线数据
-func get_k_data(code, startT, endT string) [][]string {
+// 根据输入生成K线下载的URL
+func urlGet(code, startT, endT string) []string {
+	var URLlist []string
+	daylist := daySplit(endT, startT, 800)
+	for _, item := range daylist {
+		st := item[0]
+		ed := item[1]
+		dsub := item[2]
+		url := "http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=kline_dayfq&param=%s,day,%s,%s,%s,fq&r=%f"
+		URL := fmt.Sprintf(url, code, st, ed, dsub, rand.Float64())
+		URLlist = append(URLlist, URL)
+	}
+	return URLlist
+}
+
+// 下载日K线数据（老版本）
+func get_k_data2(code, startT, endT string) [][]string {
 	//---------------------------------生成下载的URL
 	url := urlGet(code, startT, endT)
 	//---------------------------------获取的数据结构
@@ -133,6 +148,54 @@ func get_k_data(code, startT, endT string) [][]string {
 
 }
 
+// 下载日K线数据
+func get_k_data(code, startT, endT string) [][]string {
+	var DS [][]string
+	//---------------------------------生成下载的URL
+	urllist := urlGet(code, startT, endT)
+	//---------------------------------获取的数据结构
+	for _, url := range urllist {
+		type stockStruct struct {
+			Code int `json:"code"`
+			Data struct {
+				Value struct {
+					Day [][]string `json:"day"`
+				} `json:"value"`
+			} `json:"data"`
+			Msg string `json:"msg"`
+		}
+		//---------------------------------下载
+		resp, err := http.Get(url)
+		check(err)
+		defer resp.Body.Close()
+		buf := bytes.NewBuffer(make([]byte, 0, 512))
+		buf.ReadFrom(resp.Body)
+		var jsonByte = buf.Bytes()[12:]
+
+		// 更换json中的shxxxxx字段为value([]byte->string->[]byte)
+		jsonStr_r := strings.Replace(string(jsonByte), code, "value", -1)
+		// 转换回byte
+		jsonByte_r := []byte(jsonStr_r)
+		// 解码json->struct
+		ff := stockStruct{}
+		json.Unmarshal(jsonByte_r, &ff)
+		// 取出数据
+		DataStruct := ff.Data.Value.Day
+		// 此步是为了去除复权日多出来的数据
+		for _, row := range DataStruct {
+			if len(row) > 6 {
+				row = row[0:6]
+			}
+			row = append(row, code)
+			DS = append(DS, row)
+		}
+
+	}
+
+	return DS
+
+}
+
 //将数组存储道postgresql(全部数据一条insert语句)
 func to_psql(value [][]string, tx *sql.Tx) {
 	// 将数组直接变成形如(a,b,c),(d,e,f) 形式的字符串，直接结合insert语句生成插入长字符串，效率高
@@ -154,6 +217,7 @@ func producer(c chan []string, v chan [][]string, pname int) {
 	var code, s, e string // 代码，开始日，结束日
 
 	// 循环下载数据
+	rand.Seed(time.Now().Unix()) //随机数初始化,否则你每次的随机数都是固定的顺序
 	for {
 		// 无限循环，等到待下载通道为空时候退出
 		if len(c) == 0 {
@@ -329,5 +393,6 @@ func downlolad() {
 func main() {
 	initialize()
 	downlolad()
-	//fmt.Println(stocklist())
+
+	//fmt.Println(get_k_data2("sh600118", "2016-01-01", "2019-12-31"))
 }
