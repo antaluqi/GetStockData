@@ -61,6 +61,7 @@ func dayMin(day1, day2 string) string {
 	}
 }
 
+//按照指定间隔分割时间段
 func daySplit(endD, startD string, sNo int) [][]string {
 	var result [][]string
 	No := daySub(endD, startD)
@@ -85,6 +86,16 @@ func array2str(array []string, splitStr string) string {
 	}
 	if len(result) > 0 {
 		result = result[0 : len(result)-len(splitStr)]
+	}
+	return result
+}
+
+// 字符串矩阵倒置
+func strArrRev(arrIn []string) []string {
+	L := len(arrIn)
+	var result []string
+	for i, _ := range arrIn {
+		result = append(result, arrIn[L-i-1])
 	}
 	return result
 }

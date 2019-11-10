@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,7 +104,7 @@ func urlGet(code, startT, endT string) []string {
 // 下载日K线数据（老版本）
 func get_k_data2(code, startT, endT string) [][]string {
 	//---------------------------------生成下载的URL
-	url := urlGet(code, startT, endT)
+	url := urlGet2(code, startT, endT)
 	//---------------------------------获取的数据结构
 	type stockStruct struct {
 		Code int `json:"code"`
@@ -194,6 +195,42 @@ func get_k_data(code, startT, endT string) [][]string {
 
 	return DS
 
+}
+
+// 获取复权数据
+func get_fq_data(code string) {
+	URL := fmt.Sprintf("http://data.gtimg.cn/flashdata/hushen/fuquan/%s.js?maxage=6000000", code)
+	resp, err := http.Get(URL)
+	check(err)
+	defer resp.Body.Close()
+	buf := bytes.NewBuffer(make([]byte, 0, 512))
+	buf.ReadFrom(resp.Body)
+	str := buf.String()
+	strArr := strings.Split(str[15:len(str)-2], "^")
+	var fqArr []float64
+	var result [][]string
+	for _, istr := range strArr {
+		istrArr := strings.Split(istr, "~")
+		istrArr[0] = istrArr[0][0:4] + "-" + istrArr[0][4:6] + "-" + istrArr[0][6:]
+		fq, _ := strconv.ParseFloat(istrArr[1], 64)
+		fqArr = append(fqArr, fq)
+		istrArr[3], _ = strconv.Unquote(`"` + istrArr[3] + `"`)
+		istrArr = append(istrArr, []string{"0", "0"}...)
+		result = append(result, istrArr)
+	}
+	z := float64(1)
+	f := z
+	L := len(fqArr)
+	var z_fqMult []string
+	f_fqMult := z_fqMult
+
+	for i, v := range fqArr {
+		z = z * v
+		f = f * fqArr[L-i-1]
+		result[i][5] = append(z_fqMult, strconv.FormatFloat(z, float64, 'E', -1, 64))
+		result[L-1-i][6] = append(f_fqMult, strconv.FormatFloat(f, float64, 'E', -1, 64))
+	}
+	fmt.Println(istrArr)
 }
 
 //将数组存储道postgresql(全部数据一条insert语句)
@@ -391,8 +428,8 @@ func downlolad() {
 
 // main=============================================================================
 func main() {
-	initialize()
-	downlolad()
+	//initialize()
+	//downlolad()
+	get_fq_data("sh600123")
 
-	//fmt.Println(get_k_data2("sh600118", "2016-01-01", "2019-12-31"))
 }
