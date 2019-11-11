@@ -198,7 +198,7 @@ func get_k_data(code, startT, endT string) [][]string {
 }
 
 // 获取复权数据
-func get_fq_data(code string) {
+func get_fq_data(code string) [][]string {
 	URL := fmt.Sprintf("http://data.gtimg.cn/flashdata/hushen/fuquan/%s.js?maxage=6000000", code)
 	resp, err := http.Get(URL)
 	check(err)
@@ -221,16 +221,16 @@ func get_fq_data(code string) {
 	z := float64(1)
 	f := z
 	L := len(fqArr)
-	var z_fqMult []string
-	f_fqMult := z_fqMult
+	//var z_fqMult []string
+	//f_fqMult := z_fqMult
 
 	for i, v := range fqArr {
-		z = z * v
-		f = f * fqArr[L-i-1]
-		result[i][5] = append(z_fqMult, strconv.FormatFloat(z, float64, 'E', -1, 64))
-		result[L-1-i][6] = append(f_fqMult, strconv.FormatFloat(f, float64, 'E', -1, 64))
+		z = z * fqArr[L-i-1]
+		f = f / v
+		result[L-i-1][4] = strconv.FormatFloat(z, 'f', -1, 64)
+		result[i][5] = strconv.FormatFloat(f, 'f', -1, 64)
 	}
-	fmt.Println(istrArr)
+	return result
 }
 
 //将数组存储道postgresql(全部数据一条insert语句)
@@ -430,6 +430,6 @@ func downlolad() {
 func main() {
 	//initialize()
 	//downlolad()
-	get_fq_data("sh600123")
+	fmt.Println(get_fq_data("sh600118"))
 
 }
