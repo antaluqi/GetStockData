@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	//"github.com/json-iterator/go"
 )
 
@@ -198,39 +197,70 @@ func get_k_data(code, startT, endT string) [][]string {
 }
 
 // 获取复权数据
-func get_fq_data(code string) [][]string {
-	URL := fmt.Sprintf("http://data.gtimg.cn/flashdata/hushen/fuquan/%s.js?maxage=6000000", code)
-	resp, err := http.Get(URL)
-	check(err)
-	defer resp.Body.Close()
-	buf := bytes.NewBuffer(make([]byte, 0, 512))
-	buf.ReadFrom(resp.Body)
-	str := buf.String()
-	strArr := strings.Split(str[15:len(str)-2], "^")
-	var fqArr []float64
-	var result [][]string
-	for _, istr := range strArr {
-		istrArr := strings.Split(istr, "~")
-		istrArr[0] = istrArr[0][0:4] + "-" + istrArr[0][4:6] + "-" + istrArr[0][6:]
-		fq, _ := strconv.ParseFloat(istrArr[1], 64)
-		fqArr = append(fqArr, fq)
-		istrArr[3], _ = strconv.Unquote(`"` + istrArr[3] + `"`)
-		istrArr = append(istrArr, []string{"0", "0"}...)
-		result = append(result, istrArr)
-	}
-	z := float64(1)
-	f := z
-	L := len(fqArr)
-	//var z_fqMult []string
-	//f_fqMult := z_fqMult
+func get_fq_data(codeList []string) [][]string {
+	var resultAll [][]string
+	codeL := len(codeList)
+	for i, code := range codeList {
+		fmt.Printf("复权数据下载%s---%d/%d\n", code, i, codeL)
+		URL := fmt.Sprintf("http://data.gtimg.cn/flashdata/hushen/fuquan/%s.js?maxage=6000000", code)
+		resp, err := http.Get(URL)
+		check(err)
+		defer resp.Body.Close()
+		buf := bytes.NewBuffer(make([]byte, 0, 512))
+		buf.ReadFrom(resp.Body)
+		str := buf.String()
+		strArr := strings.Split(str[15:len(str)-2], "^")
+		if len(strArr) < 2 {
+			continue
+		}
+		var fqArr []float64
+		var result [][]string
+		for _, istr := range strArr {
+			istrArr := strings.Split(istr, "~")
+			istrArr[0] = istrArr[0][0:4] + "-" + istrArr[0][4:6] + "-" + istrArr[0][6:]
+			fq, _ := strconv.ParseFloat(istrArr[1], 64)
+			fqArr = append(fqArr, fq)
+			istrArr[3], _ = strconv.Unquote(`"` + istrArr[3] + `"`)
+			istrArr = append(istrArr, []string{"0", "0", code}...)
+			result = append(result, istrArr)
+		}
+		z := float64(1)
+		f := z
+		L := len(fqArr)
+		//var z_fqMult []string
+		//f_fqMult := z_fqMult
 
-	for i, v := range fqArr {
-		z = z * fqArr[L-i-1]
-		f = f / v
-		result[L-i-1][4] = strconv.FormatFloat(z, 'f', -1, 64)
-		result[i][5] = strconv.FormatFloat(f, 'f', -1, 64)
+		for i, v := range fqArr {
+			z = z * fqArr[L-i-1]
+			f = f / v
+			result[L-i-1][4] = strconv.FormatFloat(z, 'f', -1, 64)
+			result[i][5] = strconv.FormatFloat(f, 'f', -1, 64)
+			result[i][3] = ""
+		}
+
+		resultAll = append(resultAll, result...)
+
 	}
-	return result
+
+	return resultAll
+}
+
+//复权数据存储
+func fq_to_data(fqdata [][]string, db *sql.DB) {
+	nrep := strings.NewReplacer("[以", "^", "数]", "^")
+	strR := nrep.Replace(fmt.Sprint(fqdata))
+
+	v := strings.Replace(strings.Replace(strings.Replace(strings.Replace(strings.Replace(strR, "'", "", -1), " ", "','", -1), "[", "('", -1), "]", "')", -1), ")','(", "),(", -1)
+	_, err := db.Query(fmt.Sprintf("truncate table %s", fq_table_name))
+	check(err)
+	_, err = db.Query(fmt.Sprintf("drop index if exists %s", index_name[fq_table_name]))
+	check(err)
+	vv := v[2 : len(v)-2]
+	sqlStr := fmt.Sprintf("insert into %s values %s;", fq_table_name, vv)
+	//fmt.Println(sqlStr)
+	check(err)
+	_, err = db.Exec(sqlStr)
+	check(err)
 }
 
 //将数组存储道postgresql(全部数据一条insert语句)
@@ -238,7 +268,7 @@ func to_psql(value [][]string, tx *sql.Tx) {
 	// 将数组直接变成形如(a,b,c),(d,e,f) 形式的字符串，直接结合insert语句生成插入长字符串，效率高
 	v := strings.Replace(strings.Replace(strings.Replace(strings.Replace(fmt.Sprint(value), " ", "','", -1), "[", "('", -1), "]", "')", -1), ")','(", "),(", -1)
 	vv := v[2 : len(v)-2]
-	sqlStr := fmt.Sprintf("insert into golang values %s;", vv)
+	sqlStr := fmt.Sprintf("insert into %s values %s;", daily_table_name, vv)
 	_, err := tx.Exec(sqlStr)
 	check(err)
 
@@ -333,7 +363,10 @@ func downlolad() {
 		createTable(db, daily_table_name)
 		fmt.Sprintf("重建%s表\n", daily_table_name)
 	}
-
+	if !checkTable(db, fq_table_name) {
+		createTable(db, fq_table_name)
+		fmt.Sprintf("重建%s表\n", fq_table_name)
+	}
 	// ---------------------------------------cover 或 append 的相关工作
 	cl := stocklist()[0:L] //网上下载代码列表
 
@@ -422,14 +455,28 @@ func downlolad() {
 	check(err)
 	// 下载+存储+建立附表计时结束
 	fmt.Println("===============================================下载+存储+建立索引+建立附表 计时: ", time.Since(t1))
+	// 下载复权数据
+	fqdata := get_fq_data(cl)
+	fq_to_data(fqdata, db)
+	fmt.Println("===============================================下载+存储+建立索引+建立附表+复权数据 计时: ", time.Since(t1))
 }
 
 //test==============================================================================
 
 // main=============================================================================
 func main() {
-	//initialize()
-	//downlolad()
-	fmt.Println(get_fq_data("sh600118"))
+	initialize()
+	downlolad()
+	//cl := stocklist()[268:269]
+	/*
+		cl := []string{"sz000717"}
+		v := get_fq_data(cl)
+		fmt.Println(v)
+		db := getDB("postgresql")
+		defer db.Close()
+		_, err := db.Query(fmt.Sprintf("truncate table fq"))
+		check(err)
+		fq_to_data(v, db)
+	*/
 
 }

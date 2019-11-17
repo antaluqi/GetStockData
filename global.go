@@ -9,7 +9,8 @@ var password_psql = "123456"
 var dbname_psql = "testDB"
 var daily_table_name = "golang"
 var code_table_name = "stock_code"
-var table_name_list = []string{daily_table_name, code_table_name}
+var fq_table_name = "fq"
+var table_name_list = []string{daily_table_name, code_table_name, fq_table_name}
 
 // ------------------------表信息
 

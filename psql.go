@@ -27,6 +27,11 @@ func initialize() {
 	index_name[code_table_name] = "codeinfo_index"                          //代码表 索引名称
 	index_colume[code_table_name] = []string{"code"}                        //代码表 索引列
 
+	columeName[fq_table_name] = []string{"date", "iqfq", "ihfq", "info", "qfq", "hfq", "code"}   //代码表 列名
+	columeType[fq_table_name] = []string{"date", "real", "real", "text", "real", "real", "text"} //代码表 列属性
+	index_name[fq_table_name] = "fq_index"                                                       //代码表 索引名称
+	index_colume[fq_table_name] = []string{"code", "date"}                                       //代码表 索引列
+
 	if L == -1 {
 		L = len(stocklist())
 	}
