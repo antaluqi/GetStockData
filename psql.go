@@ -82,6 +82,10 @@ func readIni() {
 	if err != nil {
 		check(err)
 	}
+	storeContent, err = cfg.GetValue("Download_DateRange", "storeContent")
+	if err != nil {
+		check(err)
+	}
 	//-------------------------------[Thread]
 
 	pCount, err = cfg.Int("Thread", "pCount")

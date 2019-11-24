@@ -369,96 +369,99 @@ func downlolad() {
 	}
 	// ---------------------------------------cover 或 append 的相关工作
 	cl := stocklist()[0:L] //网上下载代码列表
-
-	// 如果store_type为cover,则清空原表
-	if storeType == "cover" {
-		_, err := db.Query(fmt.Sprintf("truncate table %s", daily_table_name))
-		check(err)
-	}
-	// 如果store_type为append，则取得所有已经下载数据的时间范围
-	if storeType == "append" {
-		DL_date = read_lastDate(db)
-	}
-
-	// ---------------------------------------代码列表(代码，开始日，结束日)，存储到一个缓冲线程中，供下载线程调用
-
-	for _, code := range cl {
+	if storeContent == "k" || storeContent == "kf" {
+		// 如果store_type为cover,则清空原表
+		if storeType == "cover" {
+			_, err := db.Query(fmt.Sprintf("truncate table %s", daily_table_name))
+			check(err)
+		}
+		// 如果store_type为append，则取得所有已经下载数据的时间范围
 		if storeType == "append" {
-			s, e, ok := dateRange(code)
-			if ok {
-				c <- []string{code, s, e}
-				fmt.Println("存放入C(append)：", code, s, e)
-			} else {
-				fmt.Println("无需存放入C：", code)
-				continue
-			}
-		} else {
-			c <- []string{code, startD, endD}
-			fmt.Println("存放入C(cover)：", code, startD, endD)
+			DL_date = read_lastDate(db)
 		}
 
-	}
-	close(c) // 关闭代码列表信道，变成只读信道
-	fmt.Println("代码存放完毕=======================================")
-	// ---------------------------------------下载线程启动
-	// 下载线程开始
-	for i := 0; i < pCount; i++ {
-		go producer(c, v, i)
-	}
+		// ---------------------------------------代码列表(代码，开始日，结束日)，存储到一个缓冲线程中，供下载线程调用
 
-	//----------------------------------------//存储线程启动
+		for _, code := range cl {
+			if storeType == "append" {
+				s, e, ok := dateRange(code)
+				if ok {
+					c <- []string{code, s, e}
+					fmt.Println("存放入C(append)：", code, s, e)
+				} else {
+					fmt.Println("无需存放入C：", code)
+					continue
+				}
+			} else {
+				c <- []string{code, startD, endD}
+				fmt.Println("存放入C(cover)：", code, startD, endD)
+			}
 
-	// 设定可异步提交
-	_, err := db.Query("set synchronous_commit to off")
-	check(err)
-	// 删除可能存在的索引
-	_, err = db.Query(fmt.Sprintf("drop index if exists %s", index_name[daily_table_name]))
-	check(err)
+		}
+		close(c) // 关闭代码列表信道，变成只读信道
+		fmt.Println("代码存放完毕=======================================")
+		// ---------------------------------------下载线程启动
+		// 下载线程开始
+		for i := 0; i < pCount; i++ {
+			go producer(c, v, i)
+		}
 
-	for i := 0; i < cCount; i++ {
-		go consumer(v, db, i)
-	}
+		//----------------------------------------//存储线程启动
 
-	// ---------------------------------------等待各个下载和存储线程运行完毕放入数据，打开阻塞线程，使主线程继续
-	// ---------------------下载阻塞
-	for i := 0; i < pCount; i++ {
-		<-pFinish
-	}
-	// 下载计时结束
-	fmt.Println("===============================================下载计时: ", time.Since(t1))
-
-	// ---------------------存储阻塞
-
-	for i := 0; i < cCount; i++ {
-		<-cFinish
-	}
-	// 建立日线表索引
-	_, err = db.Query(fmt.Sprintf("create index %s on %s(%s)", index_name[daily_table_name], daily_table_name, array2str(index_colume[daily_table_name], ",")))
-	check(err)
-	// 下载+存储计时结束
-	fmt.Println("===============================================下载+存储+建立索引 计时: ", time.Since(t1))
-
-	// --------------------------------------------------------------生成stock_code表及其索引
-	if !checkTable(db, code_table_name) {
-		createTable(db, code_table_name)
-	} else {
-		_, err = db.Exec(fmt.Sprintf("drop index if exists %s", index_name[code_table_name]))
+		// 设定可异步提交
+		_, err := db.Query("set synchronous_commit to off")
 		check(err)
-		_, err = db.Exec(fmt.Sprintf("truncate table %s", code_table_name))
+		// 删除可能存在的索引
+		_, err = db.Query(fmt.Sprintf("drop index if exists %s", index_name[daily_table_name]))
 		check(err)
-	}
 
-	sqlStr := fmt.Sprintf("insert into %s select code as %s,min(date) as %s,max(date) as %s from %s group by code", code_table_name, columeName[code_table_name][0], columeName[code_table_name][1], columeName[code_table_name][2], daily_table_name)
-	_, err = db.Exec(sqlStr)
-	sqlStr = fmt.Sprintf("create index %s on %s(%s)", index_name[code_table_name], code_table_name, array2str(index_colume[code_table_name], ","))
-	_, err = db.Exec(sqlStr)
-	check(err)
-	// 下载+存储+建立附表计时结束
-	fmt.Println("===============================================下载+存储+建立索引+建立附表 计时: ", time.Since(t1))
-	// 下载复权数据
-	fqdata := get_fq_data(cl)
-	fq_to_data(fqdata, db)
-	fmt.Println("===============================================下载+存储+建立索引+建立附表+复权数据 计时: ", time.Since(t1))
+		for i := 0; i < cCount; i++ {
+			go consumer(v, db, i)
+		}
+
+		// ---------------------------------------等待各个下载和存储线程运行完毕放入数据，打开阻塞线程，使主线程继续
+		// ---------------------下载阻塞
+		for i := 0; i < pCount; i++ {
+			<-pFinish
+		}
+		// 下载计时结束
+		fmt.Println("===============================================下载计时: ", time.Since(t1))
+
+		// ---------------------存储阻塞
+
+		for i := 0; i < cCount; i++ {
+			<-cFinish
+		}
+		// 建立日线表索引
+		_, err = db.Query(fmt.Sprintf("create index %s on %s(%s)", index_name[daily_table_name], daily_table_name, array2str(index_colume[daily_table_name], ",")))
+		check(err)
+		// 下载+存储计时结束
+		fmt.Println("===============================================下载+存储+建立索引 计时: ", time.Since(t1))
+
+		// --------------------------------------------------------------生成stock_code表及其索引
+		if !checkTable(db, code_table_name) {
+			createTable(db, code_table_name)
+		} else {
+			_, err = db.Exec(fmt.Sprintf("drop index if exists %s", index_name[code_table_name]))
+			check(err)
+			_, err = db.Exec(fmt.Sprintf("truncate table %s", code_table_name))
+			check(err)
+		}
+
+		sqlStr := fmt.Sprintf("insert into %s select code as %s,min(date) as %s,max(date) as %s from %s group by code", code_table_name, columeName[code_table_name][0], columeName[code_table_name][1], columeName[code_table_name][2], daily_table_name)
+		_, err = db.Exec(sqlStr)
+		sqlStr = fmt.Sprintf("create index %s on %s(%s)", index_name[code_table_name], code_table_name, array2str(index_colume[code_table_name], ","))
+		_, err = db.Exec(sqlStr)
+		check(err)
+		// 下载+存储+建立附表计时结束
+		fmt.Println("===============================================下载+存储+建立索引+建立附表 计时: ", time.Since(t1))
+	}
+	if storeContent == "f" || storeContent == "kf" {
+		// 下载复权数据
+		fqdata := get_fq_data(cl)
+		fq_to_data(fqdata, db)
+		fmt.Println("===============================================下载+存储+建立索引+建立附表+复权数据 计时: ", time.Since(t1))
+	}
 }
 
 //test==============================================================================

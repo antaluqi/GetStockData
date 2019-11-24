@@ -24,6 +24,7 @@ var startD string                       //开始日
 var endD string                         //结束日
 var DL_date = make(map[string][]string) //用于append的每个code下载起始日储存
 var storeType string                    // 重置reload/更新append
+var storeContent string                 // 下载内容 k：日线/f：复权数据/kf：日线+复权数据
 var pCount int                          // 下载线程数
 var cCount int                          // 存储线程数
 var L int                               // 测试代码的个数
