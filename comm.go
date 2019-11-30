@@ -67,10 +67,10 @@ func daySplit(endD, startD string, sNo int) [][]string {
 	No := daySub(endD, startD)
 	st := startD
 	ed := endD
-	for i := 0; i < No; {
-		ed = dayMin(endD, dayAdd(st, sNo))
+	for i := 0; i <= No; {
+		ed = dayMin(endD, dayAdd(st, sNo-1))
 		i = i + sNo
-		iresult := []string{st, ed, strconv.Itoa(daySub(ed, st))}
+		iresult := []string{st, ed, strconv.Itoa(daySub(ed, st) + 1)}
 		result = append(result, iresult)
 
 		st = dayAdd(ed, 1)

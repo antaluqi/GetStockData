@@ -470,16 +470,5 @@ func downlolad() {
 func main() {
 	initialize()
 	downlolad()
-	//cl := stocklist()[268:269]
-	/*
-		cl := []string{"sz000717"}
-		v := get_fq_data(cl)
-		fmt.Println(v)
-		db := getDB("postgresql")
-		defer db.Close()
-		_, err := db.Query(fmt.Sprintf("truncate table fq"))
-		check(err)
-		fq_to_data(v, db)
-	*/
 
 }
